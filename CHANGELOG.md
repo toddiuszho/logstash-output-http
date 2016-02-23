@@ -1,3 +1,6 @@
+## 1.1.3
+ - debug message being sent
+
 ## 1.1.2
  - retrofiting back to logstash 1.x
 

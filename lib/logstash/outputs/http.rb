@@ -166,7 +166,7 @@ class LogStash::Outputs::Http < LogStash::Outputs::Base
     if @format == "json"
       LogStash::Json.dump(map_event(event))
     elsif @format == "message"
-      event.sprintf(@message)
+      @logger.debug(event.sprintf(@message))
     else
       encode(map_event(event))
     end
