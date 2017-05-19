@@ -36,6 +36,9 @@ class LogStash::Outputs::Http < LogStash::Outputs::Base
   # format is `headers => ["X-My-Header", "%{host}"]`
   config :headers, :validate => :hash
 
+  # How often, in seconds, to flush the body
+  config :flush_interval, :validate => :number, :default => 0
+
   # Content type
   #
   # If not specified, this defaults to the following:
@@ -77,6 +80,8 @@ class LogStash::Outputs::Http < LogStash::Outputs::Base
     @pool_max.times {|t| @request_tokens << true }
 
     @requests = Array.new
+    @flush_interval = @flush_interval.to_i
+    @buf = StringWriter.new
 
     if @content_type.nil?
       case @format
@@ -89,13 +94,45 @@ class LogStash::Outputs::Http < LogStash::Outputs::Base
     validate_format!
   end # def register
 
+  # TODO
+  private def buffer_bodylet(event, data)
+    @buf.write(data)
+    @buf.write('\n')
+    flush(event, buf)
+  end
+
+  # TODO
+  private def flush(event, buf)
+    if flush_interval > 0
+      flush_buffers(event, buf)
+    else
+      transmit(event, buf.toString())
+      @buf = StringBuffer.new
+    end
+  end
+
+  # TODO
+  private def flush_buffers(event, buf)
+    return unless Time.now - @last_flush_cycle >= flush_interval
+    transmit(event, buf.toString())
+    @buf = StringBuffer.new
+    @last_flush_cycle = Time.now
+  end
+
   # TODO: (colin) the request call sequence + async handling will have to be reworked when using
   # Maticore >= 5.0. I will set a version constrain in the gemspec for this.
   def receive(event)
     return unless output?(event)
 
-    body = event_body(event)
+    bodylet = event_body(event)
+    if flush_interval > 0
+      buffer_bodylet(event, bodylet)
+    else
+      transmit(event, bodylet)
+    end
+  end
 
+  def transmit(event, body)
     # Block waiting for a token
     token = @request_tokens.pop
 
